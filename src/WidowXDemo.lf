@@ -1,0 +1,67 @@
+/**
+ * Trossen Robotics WidowX 250 6DOF robot arm demo.
+ *
+ * Moves each of the 6 arm joints through a sinusoidal range of values.
+ *
+ * @author Sriram Bhimaraju
+ */
+target Python {
+  workers: 1,
+  keepalive: true
+}
+import MuJoCoWidowX from "lib/MuJoCoWidowX.lf"
+preamble {=
+  from mujoco.glfw import glfw
+  import math
+=}
+
+reactor JointOscillator(
+    period = 100 ms,
+    amplitude = 0.5,
+    frequency = 0.2) {
+  input restart
+  output command
+  timer t(0, period)
+  state angle = 0.0
+
+  reaction(restart) {=
+    self.angle = 0.0
+  =}
+
+  reaction(t) -> command {=
+    command.set(self.amplitude * math.sin(self.angle))
+    self.angle += 2 * math.pi * self.frequency * 0.1
+  =}
+}
+
+main reactor {
+  timer read_state_timer(0, 500 ms)
+  m = new MuJoCoWidowX(frame_period = 33 ms)
+  c = new[7] JointOscillator(period = 100 ms, amplitude = 0.5)
+  c.command -> m.motor
+
+  reaction(startup) {=
+    print("*** Backspace to reset.")
+    print("*** Type q to quit.\n")
+  =}
+
+  reaction(m.key) -> m.restart, c.restart {=
+    if m.key.value.act == glfw.PRESS:
+      if m.key.value.key == glfw.KEY_BACKSPACE:
+        m.restart.set(True)
+        for i in range(7):
+          c[i].restart.set(True)
+      elif m.key.value.key == glfw.KEY_Q:
+        lf.request_stop()
+  =}
+
+  reaction(read_state_timer) -> m.read_state {=
+    m.read_state.set(True)
+  =}
+
+  reaction(m.joint_pos, m.joint_vel) {=
+    qpos = " ".join(f"{m.joint_pos[i].value:.4f}" for i in range(8))
+    qvel = " ".join(f"{m.joint_vel[i].value:.4f}" for i in range(8))
+    print(f"qpos={qpos} | qvel={qvel}")
+  =}
+}
