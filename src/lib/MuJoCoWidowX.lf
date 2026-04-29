@@ -1,0 +1,36 @@
+target Python
+
+import MuJoCoAuto from "MuJoCoAuto.lf"
+
+/**
+ * Trossen Robotics WidowX 250 6DOF robot arm.
+ *
+ * @author Sriram Bhimaraju
+ */
+reactor MuJoCoWidowX(
+    model_file = {=
+      lf.source_directory() + "/models/mujoco_menagerie/trossen_wx250s/scene.xml"
+    =}) extends MuJoCoAuto {
+  preamble {=
+    import mujoco
+  =}
+  input[7] motor
+  input read_state
+  output[8] joint_pos
+  output[8] joint_vel
+
+  reaction(motor) {=
+    self.advance_simulator()
+    for i in range(7):
+      if motor[i].is_present:
+        self.context.d.ctrl[i] = motor[i].value
+  =}
+
+  reaction(read_state) -> joint_pos, joint_vel {=
+    if not read_state.value:
+      return
+    for i in range(8):
+      joint_pos[i].set(float(self.context.d.qpos[i]))
+      joint_vel[i].set(float(self.context.d.qvel[i]))
+  =}
+}
