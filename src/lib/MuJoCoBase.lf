@@ -1,9 +1,11 @@
 /** @file Base class for reactors using the MuJoCo physics-based simulation framework. */
 target Python {
   keepalive: true,
-  cmake-args: {
-    Python_EXECUTABLE: "mjpython"
-  }
+  single-threaded: true,
+  // If you are using `mjpython`, then uncomment the following lines
+  // cmake-args: {
+  //   Python_EXECUTABLE: "mjpython"
+  // }
 }
 
 preamble {=

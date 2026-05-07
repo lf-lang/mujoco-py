@@ -29,3 +29,28 @@ Build the demos using `lfc` or `make`:
 * [MuJoCoCarDemo](src/MuJoCoCarDemo.lf): Simple drivable car.
 * [MuJoCoCarAutoDemo](src/MuJoCoCarAutoDemo.lf): Simple drivable car.
 * [PandaDemo](src/PandaDemo.lf): Franka Emika Panda robot doing gyrations.
+* [PandaDemoCamCtrl](src/PandaDemoCamCtrl.lf): Franka Emika Panda robot with camera-based person detection. The robot pauses automatically when two or more people are detected by a YOLOv8 DNN monitoring the webcam feed, and resumes when the area is clear.
+
+### PandaDemoCamCtrl Prerequisites
+
+This demo uses [YOLOv8](https://github.com/ultralytics/ultralytics) and OpenCV for real-time object detection. It requires a Python virtual environment with the dependencies listed in [src/lib/video/requirements.txt](src/lib/video/requirements.txt), which covers all reactors under [src/lib/video/](src/lib/video/).
+
+Set up the virtual environment:
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu  # or cu121 for NVIDIA GPU
+pip install -r src/lib/video/requirements.txt
+```
+
+The YOLOv8 model weights (`yolov8n.pt`) are downloaded automatically on first run.
+
+Then compile and run:
+
+```sh
+lfc src/PandaDemoCamCtrl.lf
+bin/PandaDemoCamCtrl.py
+```
+
+Press `Backspace` to reset the robot arm, `q` to quit.

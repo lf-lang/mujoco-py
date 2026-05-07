@@ -1,0 +1,38 @@
+# MuJoCo
+mujoco
+
+# NOTE: torch and torchvision are NOT listed here.
+# Install them separately BEFORE running pip install -r requirements.txt.
+# See README.md for the correct command depending on whether you have a GPU.
+#
+# CPU (no GPU):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#
+# NVIDIA GPU (example for CUDA 12.1):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+
+# Video processing and analysis
+opencv-python>=4.8.0
+pandas
+tqdm
+seaborn
+ipywidgets
+ipython
+ipykernel
+matplotlib>=3.2.2
+numpy>=2.0.0
+Pillow>=7.1.2
+PyYAML>=5.3.1
+scipy>=1.4.1
+requests
+ultralytics
+
+# Logging
+tensorboard>=2.4.1
+thop
+
+# rendering
+PyOpenGL
+PyOpenGL-accelerate
+PyQt5

@@ -1,0 +1,162 @@
+/**
+ * Franka Emika Panda robot demo with camera-based person detection.
+ *
+ * Moves each of the eight joints of the Panda robot through a range of values defined in a CSV
+ * file, while using a YOLOv8 DNN to monitor the webcam feed. The robot pauses automatically
+ * when two or more people are detected nearby, and resumes when the area is clear.
+ *
+ * See [README.md](../README.md) for prerequisites and installation instructions.
+ *
+ * The CSV file "PandaDemoParameters.csv" (located in the same directory) defines motion
+ * parameters. There are three datasets corresponding to three different speeds of motion.
+ * To select a dataset, change the top-level `dataset` parameter to 0, 1, or 2.
+ * 
+ * The Robot arm will stop moving when the number of people detected by the DNN is greater than 
+ * or equal to 2. The robot will resume moving when the number of people detected is less than 2.
+ *
+ * The demo is based on the original Panda demo, as well as Yolo, DNN and Video examples from the
+ * LF playground.
+ *
+ * @author Chadlia Jerad
+ */
+
+target Python {
+  single-threaded: true,
+  keepalive: true
+}
+
+import MuJoCoPanda from "lib/MuJoCoPanda.lf"
+import DNN, Plotter from "lib/video/YOLOv8_Webcam.lf"
+import WebCam, Display from "lib/video/Video.lf"
+
+preamble {=
+  import csv
+  from mujoco.glfw import glfw
+=}
+
+reactor SimpleController(
+    period = 100 ms,
+    dataset = 0,
+    step=0.1,
+    high_limit=1.0,
+    low_limit=-1.0,
+    bank_index=0,
+    parameter_file="") 
+{
+  timer t(0, period)
+  input restart
+  input pause_play
+  output command
+  state motor = 0.0
+
+  # In Python, can't overwrite parameter values, so we use state variables instead.
+  state step_value = step
+  state high_limit_value = high_limit
+  state low_limit_value = low_limit
+
+  reaction(startup) {=
+    if self.parameter_file:
+      with open(self.parameter_file, "r", encoding="utf-8-sig") as f:
+        rows = list(csv.reader(f))
+      row_idx = (9 * self.dataset) + self.bank_index + 1
+      if row_idx < len(rows):
+        row = rows[row_idx]
+        self.step_value = float(row[0].strip())
+        self.high_limit_value = float(row[1].strip())
+        self.low_limit_value = float(row[2].strip())
+  =}
+
+  initial mode PLAY {
+    reaction(restart) {=
+      self.motor = 0.0
+    =}
+
+    reaction(pause_play) -> PAUSE {=
+      PAUSE.set()
+    =}
+
+    reaction(t) -> command {=
+      command.set(self.motor)
+      self.motor += self.step_value
+      if self.motor > self.high_limit_value or self.motor < self.low_limit_value:
+        self.step_value = -self.step_value
+    =}
+  } 
+
+  mode PAUSE {
+    reaction(t) -> command {=
+      command.set(0.0)
+    =}
+
+    reaction(pause_play) -> reset(PLAY) {=
+      PLAY.set()
+    =}
+  }
+}
+
+main reactor(dataset = 3) {
+  timer read_state_timer(0, 500 ms)
+  state nbr_person_detected = 0
+  state is_paused = False
+
+  m = new MuJoCoPanda(frame_period = 50 ms)
+  c = new[8] SimpleController(
+      period = 100 ms,
+      dataset = dataset,
+      parameter_file = {= lf.source_directory() + "/PandaDemoParameters.csv" =}
+  )
+  # Offset prevents deadline violations during startup.
+  webcam = new WebCam(webcam_id=0, offset = 3 s) 
+  // webcam = new WebCam(url="http://10.152.67.28:8080/video", offset = 3 s)
+  dnn = new DNN()
+  plotter = new Plotter(label_deadline = 100 msec)
+  display = new Display()
+
+  c.command -> m.motor
+  (webcam.camera_frame)+ -> dnn.frame, plotter.frame
+  dnn.labels, dnn.label_coordinates -> plotter.labels, plotter.label_coordinates
+
+  dnn.model -> plotter.model
+  plotter.result -> display.frame
+
+  reaction(startup) {=
+    print("*** Backspace to reset.")
+    print("*** Type q to quit.\n")
+  =}
+
+  reaction(m.key) -> m.restart, c.restart {=
+    if m.key.value.act == glfw.PRESS:
+      if m.key.value.key == glfw.KEY_BACKSPACE:
+        m.restart.set(True)
+        for i in range(8):
+          c[i].restart.set(True)
+      elif m.key.value.key == glfw.KEY_Q:
+        lf.request_stop()
+  =}
+
+  reaction(read_state_timer) -> m.read_state {=
+    m.read_state.set(True)
+  =}
+
+  reaction(dnn.labels) -> c.pause_play{=
+    person_count = sum(1 for label in dnn.labels.value if int(label) == 0)
+    self.nbr_person_detected = person_count
+    should_pause = person_count >= 2
+    if should_pause and not self.is_paused:
+      print(f"{person_count} persons detected at {lf.time.logical_elapsed()/1000000000} => Pausing robot: too many people around!")
+      for i in range(8):
+        c[i].pause_play.set(True)
+      self.is_paused = True
+    elif not should_pause and self.is_paused:
+      print(f"{person_count} persons detected at {lf.time.logical_elapsed()/1000000000} => Resuming robot.")
+      for i in range(8):
+        c[i].pause_play.set(True)
+      self.is_paused = False
+  =}
+
+  reaction(m.joint_pos, m.joint_vel) {=
+    qpos = " ".join(f"{m.joint_pos[i].value:.4f}" for i in range(9))
+    qvel = " ".join(f"{m.joint_vel[i].value:.4f}" for i in range(9))
+    # print(f"qpos={qpos} | qvel={qvel}")
+  =}
+}
